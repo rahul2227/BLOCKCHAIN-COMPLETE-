@@ -102,6 +102,9 @@ class BlockChain:
 #creating a flask based web app
 app = Flask(__name__)
 
+#creating an address for the node on Post 5000
+node_address = str(uuid4()).replace('-', '') #it is needed for getting mining fee from the block being mined as there will be a transaction from that block address to you
+
 #creating a blockchain
 blockchain = BlockChain()
 
@@ -113,12 +116,14 @@ def mine_block():
     previous_proof = previous_block['proof']
     proof = blockchain.proof_of_work(previous_proof)
     previous_hash = blockchain.hash(previous_block)
+    blockchain.add_transaction(sender = node_address, receiver = 'HARLEQUIN', amount = 1 )
     block = blockchain.Create_Block(proof, previous_hash)
     response = {'Message' : 'Congratulations, you just mined a block!', 
                 'index' : block['index'],
                 'timestamp' : block['timestamp'],
                 'proof' : block['proof'],
-                'previous_hash' : block['previous_hash']}
+                'previous_hash' : block['previous_hash'],
+                'transactions' : block['transactions']}
     return jsonify(response), 200
 
 
@@ -140,6 +145,51 @@ def is_valid():
         response = {'message' : 'All good. The blockchain is valid.'}
     else:
         response = {'message' : 'My man we got a problem, blockchain is not valid here.'}
+    return jsonify(response), 200
+
+# Adding a new transaction to the Blockchain
+
+@app.route('/add_transaction', methods = ['POST'])
+def add_transaction():
+    json = request.get_json()
+    transaction_keys = ['sender', 'receiver', 'amount']
+    if not all(key in json for key in transaction_keys):
+        return 'Houstein, we have a problem . It looks like Some elements are missing!!!', 400
+    index = blockchain.add_transaction(json['sender'], json['receiver'], json['amount'])
+    response = {'message' : f'This transaction will be added to Block {index}'}
+    return jsonify(response), 201
+
+
+
+# Decentralizing our Blockchain
+
+#Connecting a New node
+
+@app.route('/connect_node', methods = ['POST'])
+
+def connect_node():
+    json = request.get_json()
+    nodes = json.get('nodes')
+    if nodes is None:
+        return 'No Nodes found', 400
+    for node in nodes:
+        blockchain.add_node(node)
+    response = {'message' : 'All the nodes are connected. HARLECOIN Blockchain now contains the following nodes: ',
+                'total_nodes' : list(blockchain.nodes)}
+    return jsonify(response), 201
+
+# Replacing the chain with the longest chain if needed
+
+@app.route('/repllace_chain', methods = ['GET'])
+
+def replace_chain():
+    is_chain_replaced = blockchain.replace_chain()
+    if is_chain_replaced:
+        response = {'message' : 'The nodes had different chains so the chain was replaced by the longest one.',
+                    'new_chain' : blockchain.chain}
+    else:
+        response = {'message' : 'All good. The blockchain is largest one.',
+                    'actual_chain' : blockchain.chain}
     return jsonify(response), 200
 
 
